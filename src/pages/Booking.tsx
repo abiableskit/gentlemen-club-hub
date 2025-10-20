@@ -7,6 +7,7 @@ import { Card } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Calendar, Clock } from "lucide-react";
 import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
 
 const Booking = () => {
   const [formData, setFormData] = useState({
@@ -30,7 +31,7 @@ const Booking = () => {
     "Deluxe Grooming Package - R600",
   ];
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     // Validate form
@@ -39,21 +40,73 @@ const Booking = () => {
       return;
     }
 
-    // Here we would normally send the booking to backend
-    toast.success("Booking request received! We'll contact you shortly to confirm.", {
-      description: `Appointment for ${formData.date} at ${formData.time}`,
-    });
+    // Email validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(formData.email)) {
+      toast.error("Please enter a valid email address");
+      return;
+    }
 
-    // Reset form
-    setFormData({
-      name: "",
-      phone: "",
-      email: "",
-      service: "",
-      date: "",
-      time: "",
-      notes: "",
-    });
+    try {
+      // Save booking to database
+      const { data: booking, error: dbError } = await supabase
+        .from('bookings')
+        .insert([
+          {
+            name: formData.name,
+            phone: formData.phone,
+            email: formData.email,
+            service: formData.service,
+            preferred_date: formData.date,
+            preferred_time: formData.time,
+            notes: formData.notes || null,
+          }
+        ])
+        .select()
+        .single();
+
+      if (dbError) {
+        console.error("Database error:", dbError);
+        toast.error("Failed to submit booking. Please try again.");
+        return;
+      }
+
+      console.log("Booking saved:", booking);
+
+      // Send confirmation email
+      const { error: emailError } = await supabase.functions.invoke('send-booking-confirmation', {
+        body: {
+          name: formData.name,
+          email: formData.email,
+          service: formData.service,
+          preferredDate: formData.date,
+          preferredTime: formData.time,
+          phone: formData.phone,
+          notes: formData.notes,
+        },
+      });
+
+      if (emailError) {
+        console.error("Email error:", emailError);
+        toast.success("Booking submitted successfully! However, we couldn't send the confirmation email. We'll contact you soon.");
+      } else {
+        toast.success("Booking submitted successfully! Check your email for confirmation.");
+      }
+      
+      // Reset form
+      setFormData({
+        name: "",
+        phone: "",
+        email: "",
+        service: "",
+        date: "",
+        time: "",
+        notes: "",
+      });
+    } catch (error) {
+      console.error("Unexpected error:", error);
+      toast.error("An unexpected error occurred. Please try again.");
+    }
   };
 
   return (
