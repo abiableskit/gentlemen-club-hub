@@ -20,11 +20,11 @@ jobs:
         with:
           enablement: true
 
-      # 3. Upload the static site files
+      # 3. Upload the static site files to Pages
       - name: Upload Pages Artifact
         uses: actions/upload-pages-artifact@v1
         with:
-          path: ./lovable-export  # <-- Replace with the folder where index.html from Lovable lives
+          path: ./lovable-export   # <-- Replace with folder containing index.html
 
       # 4. Deploy to GitHub Pages
       - name: Deploy to GitHub Pages
