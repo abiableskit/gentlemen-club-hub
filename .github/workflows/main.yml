@@ -1,37 +1,31 @@
-name: Deploy website to GitHub Pages
+name: Deploy Gentlemen's Club Barbershop from Lovable to GitHub Pages
 
 on:
   push:
     branches:
-      - main
-
-permissions:
-  contents: read
-  pages: write
-  id-token: write
-
-concurrency:
-  group: "pages"
-  cancel-in-progress: true
+      - main  # Trigger deploy on push to main
 
 jobs:
   deploy:
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
+
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      # 1. Checkout the repo
+      - name: Checkout Repository
+        uses: actions/checkout@v3
 
-      - name: Setup Pages
+      # 2. Configure GitHub Pages (auto-enable)
+      - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
-
-      - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
         with:
-          path: ./
+          enablement: true
 
+      # 3. Upload the static site files
+      - name: Upload Pages Artifact
+        uses: actions/upload-pages-artifact@v1
+        with:
+          path: ./lovable-export  # <-- Replace with the folder where index.html from Lovable lives
+
+      # 4. Deploy to GitHub Pages
       - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v1
