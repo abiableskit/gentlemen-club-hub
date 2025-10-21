@@ -1,31 +1,45 @@
-name: Deploy Gentlemen's Club Barbershop to GitHub Pages
+name: Build and Deploy Gentlemen's Club Barber Shop
 
 on:
   push:
     branches:
-      - main  # Deploy on push to main
+      - main  # Deploy on push to main branch
 
 jobs:
-  deploy:
+  build-and-deploy:
     runs-on: ubuntu-latest
 
     steps:
-      # 1. Checkout the repo
-      - name: Checkout Repository
+      # 1. Checkout the repository
+      - name: Checkout repository
         uses: actions/checkout@v3
 
-      # 2. Configure GitHub Pages (auto-enable)
+      # 2. Setup Node.js
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: 20
+
+      # 3. Install dependencies
+      - name: Install dependencies
+        run: npm install
+
+      # 4. Build the Vite project
+      - name: Build project
+        run: npm run build
+
+      # 5. Configure GitHub Pages
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
         with:
           enablement: true
 
-      # 3. Upload the static site files
+      # 6. Upload the build folder
       - name: Upload Pages Artifact
         uses: actions/upload-pages-artifact@v1
         with:
-          path: ./lovable-export   # Folder containing index.html
+          path: ./dist  # <-- Vite build output folder
 
-      # 4. Deploy to GitHub Pages
+      # 7. Deploy to GitHub Pages
       - name: Deploy to GitHub Pages
         uses: actions/deploy-pages@v1
