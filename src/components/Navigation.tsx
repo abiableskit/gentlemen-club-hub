@@ -23,8 +23,8 @@ const Navigation = () => {
         <div className="flex items-center justify-between h-20">
           {/* Logo */}
           <Link to="/" className="flex items-center gap-3 group">
-            <div className="w-12 h-12 rounded-full bg-gradient-gold flex items-center justify-center shadow-gold">
-              <Scissors className="w-6 h-6 text-background" />
+            <div className="w-12 h-12 rounded-full bg-secondary flex items-center justify-center border-2 border-gold shadow-gold">
+              <Scissors className="w-6 h-6 text-gold" strokeWidth={2.5} />
             </div>
             <div className="hidden md:block">
               <div className="text-xl font-bold text-gold">Gentlemen's Club</div>
