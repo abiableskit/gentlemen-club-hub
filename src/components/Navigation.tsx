@@ -24,7 +24,7 @@ const Navigation = () => {
           {/* Logo */}
           <Link to="/" className="flex items-center gap-3 group">
             <div className="w-12 h-12 rounded-full bg-gradient-gold flex items-center justify-center shadow-gold">
-              <Scissors className="w-6 h-6 text-primary-foreground" />
+              <Scissors className="w-6 h-6 text-background" />
             </div>
             <div className="hidden md:block">
               <div className="text-xl font-bold text-gold">Gentlemen's Club</div>
