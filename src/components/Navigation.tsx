@@ -1,11 +1,23 @@
 import { useState } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { Menu, X, Scissors } from "lucide-react";
+import { Menu, X, Scissors, LogOut, Shield } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useAuth } from "@/hooks/useAuth";
+import { toast } from "sonner";
 
 const Navigation = () => {
   const [isOpen, setIsOpen] = useState(false);
   const location = useLocation();
+  const { user, isAdmin, signOut } = useAuth();
+
+  const handleSignOut = async () => {
+    const { error } = await signOut();
+    if (error) {
+      toast.error("Failed to sign out");
+    } else {
+      toast.success("Signed out successfully");
+    }
+  };
 
   const navItems = [
     { path: "/", label: "Home" },
@@ -47,6 +59,28 @@ const Navigation = () => {
                 {item.label}
               </Link>
             ))}
+            {user ? (
+              <>
+                {isAdmin && (
+                  <Link to="/admin">
+                    <Button variant="outline" size="lg" className="gap-2">
+                      <Shield className="w-4 h-4" />
+                      Admin
+                    </Button>
+                  </Link>
+                )}
+                <Button variant="outline" size="lg" onClick={handleSignOut} className="gap-2">
+                  <LogOut className="w-4 h-4" />
+                  Sign Out
+                </Button>
+              </>
+            ) : (
+              <Link to="/auth">
+                <Button variant="outline" size="lg">
+                  Sign In
+                </Button>
+              </Link>
+            )}
             <Link to="/booking">
               <Button variant="premium" size="lg">
                 Book Now
@@ -82,6 +116,30 @@ const Navigation = () => {
                   {item.label}
                 </Link>
               ))}
+              {user ? (
+                <>
+                  {isAdmin && (
+                    <Link to="/admin" onClick={() => setIsOpen(false)} className="px-4">
+                      <Button variant="outline" size="lg" className="w-full gap-2">
+                        <Shield className="w-4 h-4" />
+                        Admin Dashboard
+                      </Button>
+                    </Link>
+                  )}
+                  <div className="px-4">
+                    <Button variant="outline" size="lg" onClick={() => { handleSignOut(); setIsOpen(false); }} className="w-full gap-2">
+                      <LogOut className="w-4 h-4" />
+                      Sign Out
+                    </Button>
+                  </div>
+                </>
+              ) : (
+                <Link to="/auth" onClick={() => setIsOpen(false)} className="px-4">
+                  <Button variant="outline" size="lg" className="w-full">
+                    Sign In
+                  </Button>
+                </Link>
+              )}
               <Link to="/booking" onClick={() => setIsOpen(false)} className="px-4">
                 <Button variant="premium" size="lg" className="w-full">
                   Book Now

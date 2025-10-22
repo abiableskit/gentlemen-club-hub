@@ -48,7 +48,11 @@ const Booking = () => {
     }
 
     try {
-      // Save booking to database
+      // Extract price from service string (e.g., "Classic Haircut - R250" -> 250)
+      const priceMatch = formData.service.match(/R(\d+)/);
+      const amount = priceMatch ? parseInt(priceMatch[1]) : 0;
+
+      // Save booking to database with pending payment
       const { data: booking, error: dbError } = await supabase
         .from('bookings')
         .insert([
@@ -60,6 +64,8 @@ const Booking = () => {
             preferred_date: formData.date,
             preferred_time: formData.time,
             notes: formData.notes || null,
+            payment_status: 'pending',
+            payment_amount: amount,
           }
         ])
         .select()
@@ -72,6 +78,32 @@ const Booking = () => {
       }
 
       console.log("Booking saved:", booking);
+
+      // Create Stripe checkout session
+      const { data: checkoutData, error: checkoutError } = await supabase.functions.invoke(
+        'create-stripe-checkout',
+        {
+          body: {
+            bookingId: booking.id,
+            amount: amount,
+            customerEmail: formData.email,
+            customerName: formData.name,
+            service: formData.service,
+          },
+        }
+      );
+
+      if (checkoutError || !checkoutData?.url) {
+        console.error("Checkout error:", checkoutError);
+        toast.error("Failed to create payment session. Please try again.");
+        return;
+      }
+
+      // Update booking with Stripe session ID
+      await supabase
+        .from('bookings')
+        .update({ stripe_session_id: checkoutData.sessionId })
+        .eq('id', booking.id);
 
       // Send confirmation email
       const { error: emailError } = await supabase.functions.invoke('send-booking-confirmation', {
@@ -88,21 +120,12 @@ const Booking = () => {
 
       if (emailError) {
         console.error("Email error:", emailError);
-        toast.success("Booking submitted successfully! However, we couldn't send the confirmation email. We'll contact you soon.");
-      } else {
-        toast.success("Booking submitted successfully! Check your email for confirmation.");
       }
+
+      // Redirect to Stripe checkout
+      toast.success("Redirecting to payment...");
+      window.location.href = checkoutData.url;
       
-      // Reset form
-      setFormData({
-        name: "",
-        phone: "",
-        email: "",
-        service: "",
-        date: "",
-        time: "",
-        notes: "",
-      });
     } catch (error) {
       console.error("Unexpected error:", error);
       toast.error("An unexpected error occurred. Please try again.");
@@ -240,7 +263,7 @@ const Booking = () => {
               </Button>
 
               <p className="text-sm text-muted-foreground text-center">
-                * Payment will be processed at the barbershop after your appointment
+                * Secure payment required to confirm your booking
               </p>
             </form>
           </Card>
