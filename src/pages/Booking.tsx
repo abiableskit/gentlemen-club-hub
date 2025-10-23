@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Calendar, Clock } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+import { bookingSchema, sanitizeForEmail } from "@/lib/validation";
 
 const Booking = () => {
   const [formData, setFormData] = useState({
@@ -19,6 +20,7 @@ const Booking = () => {
     time: "",
     notes: "",
   });
+  const [isLoading, setIsLoading] = useState(false);
 
   const services = [
     "Classic Haircut - R250",
@@ -33,37 +35,54 @@ const Booking = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setIsLoading(true);
     
-    // Validate form
-    if (!formData.name || !formData.phone || !formData.email || !formData.service || !formData.date || !formData.time) {
-      toast.error("Please fill in all required fields");
-      return;
-    }
-
-    // Email validation
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(formData.email)) {
-      toast.error("Please enter a valid email address");
-      return;
-    }
-
     try {
-      // Extract price from service string (e.g., "Classic Haircut - R250" -> 250)
-      const priceMatch = formData.service.match(/R(\d+)/);
+      // Validate with Zod schema
+      const validationResult = bookingSchema.safeParse({
+        name: formData.name.trim(),
+        phone: formData.phone.trim(),
+        email: formData.email.trim(),
+        service: formData.service,
+        preferred_date: formData.date,
+        preferred_time: formData.time,
+        notes: formData.notes.trim()
+      });
+
+      if (!validationResult.success) {
+        const firstError = validationResult.error.errors[0];
+        toast.error(firstError.message);
+        setIsLoading(false);
+        return;
+      }
+
+      const validatedData = validationResult.data;
+
+      // Extract price from service string
+      const priceMatch = validatedData.service.match(/R(\d+)/);
       const amount = priceMatch ? parseInt(priceMatch[1]) : 0;
 
-      // Save booking to database with pending payment
+      // Get current user session for authentication
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (!session) {
+        toast.error("Please sign in to make a booking");
+        setIsLoading(false);
+        return;
+      }
+
+      // Save booking to database with validated data
       const { data: booking, error: dbError } = await supabase
         .from('bookings')
         .insert([
           {
-            name: formData.name,
-            phone: formData.phone,
-            email: formData.email,
-            service: formData.service,
-            preferred_date: formData.date,
-            preferred_time: formData.time,
-            notes: formData.notes || null,
+            name: validatedData.name,
+            phone: validatedData.phone,
+            email: validatedData.email,
+            service: validatedData.service,
+            preferred_date: validatedData.preferred_date,
+            preferred_time: validatedData.preferred_time,
+            notes: validatedData.notes || null,
             payment_status: 'pending',
             payment_amount: amount,
           }
@@ -74,28 +93,33 @@ const Booking = () => {
       if (dbError) {
         console.error("Database error:", dbError);
         toast.error("Failed to submit booking. Please try again.");
+        setIsLoading(false);
         return;
       }
 
       console.log("Booking saved:", booking);
 
-      // Create Stripe checkout session
+      // Create Stripe checkout session with authentication
       const { data: checkoutData, error: checkoutError } = await supabase.functions.invoke(
         'create-stripe-checkout',
         {
           body: {
             bookingId: booking.id,
             amount: amount,
-            customerEmail: formData.email,
-            customerName: formData.name,
-            service: formData.service,
+            customerEmail: validatedData.email,
+            customerName: validatedData.name,
+            service: validatedData.service,
           },
+          headers: {
+            Authorization: `Bearer ${session.access_token}`
+          }
         }
       );
 
       if (checkoutError || !checkoutData?.url) {
         console.error("Checkout error:", checkoutError);
         toast.error("Failed to create payment session. Please try again.");
+        setIsLoading(false);
         return;
       }
 
@@ -105,17 +129,20 @@ const Booking = () => {
         .update({ stripe_session_id: checkoutData.sessionId })
         .eq('id', booking.id);
 
-      // Send confirmation email
+      // Send confirmation email with authentication and sanitized data
       const { error: emailError } = await supabase.functions.invoke('send-booking-confirmation', {
         body: {
-          name: formData.name,
-          email: formData.email,
-          service: formData.service,
-          preferredDate: formData.date,
-          preferredTime: formData.time,
-          phone: formData.phone,
-          notes: formData.notes,
+          name: sanitizeForEmail(validatedData.name),
+          email: validatedData.email,
+          service: validatedData.service,
+          preferredDate: validatedData.preferred_date,
+          preferredTime: validatedData.preferred_time,
+          phone: sanitizeForEmail(validatedData.phone),
+          notes: validatedData.notes ? sanitizeForEmail(validatedData.notes) : undefined,
         },
+        headers: {
+          Authorization: `Bearer ${session.access_token}`
+        }
       });
 
       if (emailError) {
@@ -129,6 +156,7 @@ const Booking = () => {
     } catch (error) {
       console.error("Unexpected error:", error);
       toast.error("An unexpected error occurred. Please try again.");
+      setIsLoading(false);
     }
   };
 
@@ -163,6 +191,7 @@ const Booking = () => {
                     placeholder="John Doe"
                     className="mt-2"
                     required
+                    disabled={isLoading}
                   />
                 </div>
 
@@ -177,6 +206,7 @@ const Booking = () => {
                       placeholder="+27 123 456 789"
                       className="mt-2"
                       required
+                      disabled={isLoading}
                     />
                   </div>
 
@@ -190,6 +220,7 @@ const Booking = () => {
                       placeholder="john@example.com"
                       className="mt-2"
                       required
+                      disabled={isLoading}
                     />
                   </div>
                 </div>
@@ -198,7 +229,11 @@ const Booking = () => {
               {/* Service Selection */}
               <div>
                 <Label htmlFor="service" className="text-gold">Select Service *</Label>
-                <Select value={formData.service} onValueChange={(value) => setFormData({ ...formData, service: value })}>
+                <Select 
+                  value={formData.service} 
+                  onValueChange={(value) => setFormData({ ...formData, service: value })}
+                  disabled={isLoading}
+                >
                   <SelectTrigger className="mt-2">
                     <SelectValue placeholder="Choose a service" />
                   </SelectTrigger>
@@ -226,6 +261,7 @@ const Booking = () => {
                     onChange={(e) => setFormData({ ...formData, date: e.target.value })}
                     className="mt-2"
                     required
+                    disabled={isLoading}
                   />
                 </div>
 
@@ -241,6 +277,7 @@ const Booking = () => {
                     onChange={(e) => setFormData({ ...formData, time: e.target.value })}
                     className="mt-2"
                     required
+                    disabled={isLoading}
                   />
                 </div>
               </div>
@@ -252,14 +289,25 @@ const Booking = () => {
                   id="notes"
                   value={formData.notes}
                   onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                  placeholder="Any specific requests or preferences..."
+                  placeholder="Any specific requests or preferences... (max 500 characters)"
                   className="mt-2 min-h-[100px]"
+                  maxLength={500}
+                  disabled={isLoading}
                 />
+                <p className="text-xs text-muted-foreground mt-1">
+                  {formData.notes.length}/500 characters
+                </p>
               </div>
 
               {/* Submit Button */}
-              <Button type="submit" variant="premium" size="lg" className="w-full">
-                Request Booking
+              <Button 
+                type="submit" 
+                variant="premium" 
+                size="lg" 
+                className="w-full"
+                disabled={isLoading}
+              >
+                {isLoading ? "Processing..." : "Request Booking"}
               </Button>
 
               <p className="text-sm text-muted-foreground text-center">

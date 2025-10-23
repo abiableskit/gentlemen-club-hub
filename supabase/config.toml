@@ -1,7 +1,7 @@
 project_id = "szqqiqdttqfdnsarqzyc"
 
 [functions.send-booking-confirmation]
-verify_jwt = false
+verify_jwt = true
 
 [functions.create-stripe-checkout]
-verify_jwt = false
+verify_jwt = true
